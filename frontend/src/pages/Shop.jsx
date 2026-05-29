@@ -1,19 +1,22 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { products } from "../data/dummy";
+import api from "../api/api";
 import ProductCard from "../components/ProductCard";
 import PublicLayout from "../components/PublicLayout";
 
 const categories = ["All", "Chargers", "Covers", "Screen Guards", "Headphones", "Accessories"];
 
 export default function Shop() {
+  const [products, setProducts] = useState([]);
   const [active, setActive] = useState("All");
   const [search, setSearch] = useState("");
 
-  const filtered = products.filter((p) =>
-    (active === "All" || p.category === active) &&
-    p.name.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    const params = {};
+    if (active !== "All") params.category = active;
+    if (search) params.search = search;
+    api.get("/api/products", { params }).then((r) => setProducts(r.data)).catch(() => {});
+  }, [active, search]);
 
   return (
     <PublicLayout>
@@ -40,14 +43,14 @@ export default function Shop() {
               value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
 
-          {filtered.length === 0 ? (
+          {products.length === 0 ? (
             <div className="text-center py-20 text-slate-400">
               <div className="text-5xl mb-4">🔍</div>
               <div className="font-medium">No products found</div>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-              {filtered.map((p, i) => (
+              {products.map((p, i) => (
                 <motion.div key={p.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                   <ProductCard product={p} />
                 </motion.div>

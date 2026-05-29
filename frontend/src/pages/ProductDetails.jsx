@@ -1,8 +1,9 @@
 import { useParams, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { MdStar, MdAddShoppingCart, MdArrowBack, MdCheckCircle } from "react-icons/md";
 import { FaWhatsapp } from "react-icons/fa";
-import { products } from "../data/dummy";
+import api from "../api/api";
 import ProductCard from "../components/ProductCard";
 import PublicLayout from "../components/PublicLayout";
 import { useCart } from "../context/CartContext";
@@ -10,10 +11,21 @@ import { useCart } from "../context/CartContext";
 export default function ProductDetails() {
   const { id } = useParams();
   const { addToCart } = useCart();
-  const product = products.find((p) => p.id === Number(id));
-  const related = products.filter((p) => p.id !== Number(id) && p.category === product?.category).slice(0, 4);
+  const [product, setProduct] = useState(null);
+  const [related, setRelated] = useState([]);
+  const [notFound, setNotFound] = useState(false);
 
-  if (!product) return (
+  useEffect(() => {
+    api.get(`/api/products/${id}`)
+      .then((r) => {
+        setProduct(r.data);
+        return api.get("/api/products", { params: { category: r.data.category } });
+      })
+      .then((r) => setRelated(r.data.filter((p) => p.id !== Number(id)).slice(0, 4)))
+      .catch(() => setNotFound(true));
+  }, [id]);
+
+  if (notFound || (!product && !notFound === false)) return (
     <PublicLayout>
       <div className="text-center py-20 text-slate-400">
         <div className="text-5xl mb-4">📦</div>
@@ -31,7 +43,7 @@ export default function ProductDetails() {
         </Link>
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="grid md:grid-cols-2 gap-10 mb-16">
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden aspect-square">
-            <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+            <img src={product.imageUrl ?? product.image} alt={product.name} className="w-full h-full object-cover" />
           </div>
           <div>
             <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold">{product.category}</span>
@@ -39,14 +51,14 @@ export default function ProductDetails() {
             <div className="flex items-center gap-2 mb-4">
               <div className="flex gap-0.5">{Array.from({ length: 5 }).map((_, i) => <MdStar key={i} className={i < Math.floor(product.rating) ? "text-amber-400" : "text-slate-200"} size={18} />)}</div>
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{product.rating}</span>
-              <span className="text-sm text-slate-400">({product.reviews} reviews)</span>
+              <span className="text-sm text-slate-400">({product.reviewCount ?? product.reviews} reviews)</span>
             </div>
             <div className="text-3xl font-bold text-slate-900 dark:text-white mb-4">₹{product.price}</div>
             <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed mb-6">{product.description}</p>
             <div className="mb-6">
               <h3 className="font-semibold text-slate-900 dark:text-white mb-3 text-sm">Key Features</h3>
               <div className="flex flex-col gap-2">
-                {product.features.map((f) => (
+                {product.features?.map((f) => (
                   <div key={f} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                     <MdCheckCircle className="text-green-500 shrink-0" size={16} /> {f}
                   </div>

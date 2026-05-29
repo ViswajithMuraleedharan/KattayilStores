@@ -2,14 +2,14 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MdCheckCircle, MdAddPhotoAlternate, MdClose } from "react-icons/md";
 import { FaWhatsapp } from "react-icons/fa";
+import axios from "axios";
 import PublicLayout from "../components/PublicLayout";
+
+const API = "http://localhost:8080";
+const WHATSAPP = "919074037326"; // change to your number
 
 const categories = ["Screen Damage", "Battery Problem", "Charging Problem", "Camera Issue", "Speaker Issue", "Water Damage", "Software Issue", "Other"];
 const brands = ["Apple", "Samsung", "OnePlus", "Xiaomi / Redmi", "Realme", "Vivo", "Oppo", "Nokia", "Other"];
-
-function generateTicket() {
-  return "MC-" + Math.floor(1000 + Math.random() * 9000);
-}
 
 export default function RepairRequest() {
   const [form, setForm] = useState({ name: "", phone: "", brand: "", model: "", category: "", description: "" });
@@ -17,6 +17,7 @@ export default function RepairRequest() {
   const [submitted, setSubmitted] = useState(false);
   const [ticket, setTicket] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const fileRef = useRef();
 
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
@@ -27,14 +28,44 @@ export default function RepairRequest() {
     setImages((p) => [...p, ...previews].slice(0, 5));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      setTicket(generateTicket());
+    setError("");
+    try {
+      const formData = new FormData();
+      // Backend expects a JSON part named "data"
+      const data = {
+        customerName: form.name,
+        phone: form.phone.replace(/\D/g, "").slice(-10), // strip non-digits, keep last 10
+        deviceBrand: form.brand,
+        deviceModel: form.model,
+        issueCategory: form.category,
+        description: form.description,
+      };
+      formData.append("data", new Blob([JSON.stringify(data)], { type: "application/json" }));
+      images.forEach((img) => formData.append("images", img.file));
+
+      const res = await axios.post(`${API}/api/repairs`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const ticketId = res.data.ticketId;
+      setTicket(ticketId);
       setSubmitted(true);
+
+      const customerMsg = encodeURIComponent(
+        `Hi ${form.name}! 👋\n\nYour repair request has been received at *Kattayil Stores*.\n\n📋 *Ticket ID:* ${ticketId}\n📱 *Device:* ${form.brand} ${form.model}\n🔧 *Issue:* ${form.category}\n\nWe'll update you as soon as we start working on it. You can track your repair at any time using your Ticket ID.\n\nThank you for choosing us! 🙏`
+      );
+      const adminMsg = encodeURIComponent(
+        `🔔 *New Repair Request*\n\n📋 *Ticket:* ${ticketId}\n👤 *Customer:* ${form.name}\n📞 *Phone:* ${form.phone}\n📱 *Device:* ${form.brand} ${form.model}\n🔧 *Issue:* ${form.category}\n📝 *Description:* ${form.description || "—"}`
+      );
+      window.open(`https://wa.me/91${form.phone.replace(/\D/g, "").slice(-10)}?text=${customerMsg}`, "_blank");
+      window.open(`https://wa.me/${WHATSAPP}?text=${adminMsg}`, "_blank");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to submit. Please try again.");
+    } finally {
       setLoading(false);
-    }, 1200);
+    }
   };
 
   const inputCls = "w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition";
@@ -49,6 +80,11 @@ export default function RepairRequest() {
           </div>
 
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 md:p-8">
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm rounded-xl px-4 py-3 mb-4">
+                {error}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -57,7 +93,7 @@ export default function RepairRequest() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Phone Number *</label>
-                  <input className={inputCls} placeholder="+91 98765 43210" type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} required />
+                  <input className={inputCls} placeholder="9876543210" type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} required />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -85,7 +121,6 @@ export default function RepairRequest() {
                 <textarea className={inputCls} rows={4} placeholder="Describe the issue in detail..." value={form.description} onChange={(e) => set("description", e.target.value)} required />
               </div>
 
-              {/* Image Upload */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                   Device Photos <span className="text-slate-400 font-normal">(optional, up to 5)</span>
@@ -113,7 +148,9 @@ export default function RepairRequest() {
 
               <button type="submit" disabled={loading}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
-                {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Submitting...</> : "Submit Repair Request"}
+                {loading
+                  ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Submitting...</>
+                  : "Submit Repair Request"}
               </button>
             </form>
           </div>
@@ -137,16 +174,18 @@ export default function RepairRequest() {
                 <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{ticket}</div>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-6">
-                You'll receive a WhatsApp confirmation on <strong>{form.phone}</strong> shortly.
+                Save this ticket ID to track your repair. You can also chat with us on WhatsApp.
               </p>
               <div className="flex flex-col gap-2">
-                <a href={`https://wa.me/919876543210?text=Hi, my repair ticket is ${ticket}`} target="_blank" rel="noreferrer"
+                <a
+                  href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(`Hi! I just submitted a repair request. My Ticket ID is *${ticket}*. Device: ${form.brand} ${form.model}. Issue: ${form.category}.`)}`}
+                  target="_blank" rel="noreferrer"
                   className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition-colors">
-                  <FaWhatsapp size={18} /> Chat on WhatsApp
+                  <FaWhatsapp size={18} /> Send via WhatsApp
                 </a>
-                <button onClick={() => setSubmitted(false)}
+                <button onClick={() => { setSubmitted(false); setForm({ name: "", phone: "", brand: "", model: "", category: "", description: "" }); setImages([]); }}
                   className="text-slate-500 dark:text-slate-400 text-sm py-2 hover:text-slate-700 dark:hover:text-white transition-colors">
-                  Close
+                  Submit Another Request
                 </button>
               </div>
             </motion.div>

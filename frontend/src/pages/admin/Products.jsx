@@ -1,34 +1,49 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MdAdd, MdEdit, MdDelete, MdClose, MdSearch } from "react-icons/md";
-import { products as initialProducts } from "../../data/dummy";
 import AdminLayout from "../../components/AdminLayout";
+import api from "../../api/api";
 
-const empty = { name: "", category: "Chargers", price: "", stock: "", description: "" };
+const empty = { name: "", category: "Chargers", price: "", stock: "", description: "", imageUrl: "" };
 const categories = ["Chargers", "Covers", "Screen Guards", "Headphones", "Accessories"];
 
 export default function AdminProducts() {
-  const [products, setProducts] = useState(initialProducts);
-  const [modal, setModal] = useState(null); // null | 'add' | 'edit'
+  const [products, setProducts] = useState([]);
+  const [modal, setModal] = useState(null);
   const [form, setForm] = useState(empty);
   const [editId, setEditId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [search, setSearch] = useState("");
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
-  const openAdd = () => { setForm(empty); setModal("add"); };
-  const openEdit = (p) => { setForm({ name: p.name, category: p.category, price: p.price, stock: p.stock, description: p.description }); setEditId(p.id); setModal("edit"); };
+  const fetchProducts = () =>
+    api.get("/api/products/admin/all").then((r) => setProducts(r.data)).catch(() => {});
 
-  const save = () => {
-    if (modal === "add") {
-      setProducts((p) => [...p, { ...form, id: Date.now(), price: Number(form.price), stock: Number(form.stock), rating: 4.5, reviews: 0, image: "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=400&q=80", features: [] }]);
-    } else {
-      setProducts((p) => p.map((x) => x.id === editId ? { ...x, ...form, price: Number(form.price), stock: Number(form.stock) } : x));
-    }
-    setModal(null);
+  useEffect(() => { fetchProducts(); }, []);
+
+  const openAdd = () => { setForm(empty); setModal("add"); };
+  const openEdit = (p) => {
+    setForm({ name: p.name, category: p.category, price: p.price, stock: p.stock, description: p.description ?? "", imageUrl: p.imageUrl ?? "" });
+    setEditId(p.id);
+    setModal("edit");
   };
 
-  const confirmDelete = () => { setProducts((p) => p.filter((x) => x.id !== deleteId)); setDeleteId(null); };
+  const save = async () => {
+    const payload = { ...form, price: Number(form.price), stock: Number(form.stock) };
+    if (modal === "add") {
+      await api.post("/api/products", payload);
+    } else {
+      await api.put(`/api/products/${editId}`, payload);
+    }
+    setModal(null);
+    fetchProducts();
+  };
+
+  const confirmDelete = async () => {
+    await api.delete(`/api/products/${deleteId}`);
+    setDeleteId(null);
+    fetchProducts();
+  };
 
   const filtered = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const inputCls = "w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -63,7 +78,7 @@ export default function AdminProducts() {
                   <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <img src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover" />
+                        <img src={p.imageUrl} alt={p.name} className="w-10 h-10 rounded-lg object-cover bg-slate-100" />
                         <span className="font-medium text-slate-900 dark:text-white">{p.name}</span>
                       </div>
                     </td>
@@ -74,7 +89,7 @@ export default function AdminProducts() {
                         {p.stock} units
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">⭐ {p.rating}</td>
+                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">⭐ {p.rating ?? "—"}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
                         <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 hover:bg-blue-100 transition-colors"><MdEdit size={16} /></button>
@@ -89,7 +104,6 @@ export default function AdminProducts() {
         </div>
       </div>
 
-      {/* Add/Edit Modal */}
       <AnimatePresence>
         {modal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -113,6 +127,8 @@ export default function AdminProducts() {
                 </div>
                 <div><label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Stock</label>
                   <input className={inputCls} type="number" value={form.stock} onChange={(e) => set("stock", e.target.value)} /></div>
+                <div><label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Image URL</label>
+                  <input className={inputCls} value={form.imageUrl} onChange={(e) => set("imageUrl", e.target.value)} /></div>
                 <div><label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Description</label>
                   <textarea className={inputCls} rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} /></div>
               </div>
@@ -125,7 +141,6 @@ export default function AdminProducts() {
         )}
       </AnimatePresence>
 
-      {/* Delete Confirm */}
       <AnimatePresence>
         {deleteId && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}

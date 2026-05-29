@@ -1,26 +1,66 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { MdSearch, MdCheckCircle, MdRadioButtonUnchecked } from "react-icons/md";
-import { repairs, statusSteps } from "../data/dummy";
+import { FaWhatsapp } from "react-icons/fa";
+import axios from "axios";
 import StatusBadge from "../components/StatusBadge";
 import PublicLayout from "../components/PublicLayout";
 
-const stepIndex = { "Request Received": 0, Inspection: 1, "Waiting for Parts": 2, "Repair In Progress": 3, Completed: 4, Delivered: 5 };
-const repairStep = { Pending: 0, Checking: 1, "Waiting for Parts": 2, Repairing: 3, Completed: 4, Delivered: 5 };
+const API = "http://localhost:8080";
+const WHATSAPP = "919074037326";
+
+// Map backend RepairStatus enum → timeline step index
+const repairStep = {
+  PENDING: 0,
+  CHECKING: 1,
+  WAITING_FOR_PARTS: 2,
+  REPAIRING: 3,
+  COMPLETED: 4,
+  DELIVERED: 5,
+};
+
+// Map backend status → display label for StatusBadge
+const statusLabel = {
+  PENDING: "Pending",
+  CHECKING: "Checking",
+  WAITING_FOR_PARTS: "Waiting for Parts",
+  REPAIRING: "Repairing",
+  COMPLETED: "Completed",
+  DELIVERED: "Delivered",
+};
+
+const statusSteps = [
+  "Request Received",
+  "Inspection",
+  "Waiting for Parts",
+  "Repair In Progress",
+  "Completed",
+  "Delivered",
+];
 
 export default function TrackRepair() {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState(null);
   const [notFound, setNotFound] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSearch = (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
-    const found = repairs.find((r) => r.id.toLowerCase() === query.toLowerCase() || r.phone === query);
-    if (found) { setResult(found); setNotFound(false); }
-    else { setResult(null); setNotFound(true); }
+    setLoading(true);
+    setNotFound(false);
+    setResult(null);
+    try {
+      const res = await axios.get(`${API}/api/repairs/track`, { params: { query } });
+      setResult(res.data);
+    } catch (err) {
+      setNotFound(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const currentStep = result ? repairStep[result.status] ?? 0 : 0;
+  const displayStatus = result ? (statusLabel[result.status] ?? result.status) : "";
 
   return (
     <PublicLayout>
@@ -34,10 +74,17 @@ export default function TrackRepair() {
           <form onSubmit={handleSearch} className="flex gap-3 mb-8">
             <input
               className="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter Ticket ID (e.g. MC-001) or Mobile Number"
-              value={query} onChange={(e) => setQuery(e.target.value)} required />
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl flex items-center gap-2 font-semibold text-sm transition-colors">
-              <MdSearch size={20} /> Track
+              placeholder="Enter Ticket ID (e.g. MC-250528-1234) or Mobile Number"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              required
+            />
+            <button type="submit" disabled={loading}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-5 py-3 rounded-xl flex items-center gap-2 font-semibold text-sm transition-colors">
+              {loading
+                ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                : <MdSearch size={20} />}
+              Track
             </button>
           </form>
 
@@ -54,15 +101,29 @@ export default function TrackRepair() {
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <div className="text-xs text-slate-400 mb-1">Ticket ID</div>
-                    <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{result.id}</div>
+                    <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{result.ticketId}</div>
                   </div>
-                  <StatusBadge status={result.status} />
+                  <StatusBadge status={displayStatus} />
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><span className="text-slate-400 text-xs">Customer</span><div className="font-medium text-slate-900 dark:text-white">{result.customer}</div></div>
-                  <div><span className="text-slate-400 text-xs">Device</span><div className="font-medium text-slate-900 dark:text-white">{result.device}</div></div>
-                  <div><span className="text-slate-400 text-xs">Issue</span><div className="font-medium text-slate-900 dark:text-white">{result.issue}</div></div>
-                  <div><span className="text-slate-400 text-xs">Est. Completion</span><div className="font-medium text-slate-900 dark:text-white">{result.eta}</div></div>
+                  <div>
+                    <span className="text-slate-400 text-xs">Customer</span>
+                    <div className="font-medium text-slate-900 dark:text-white">{result.customerName}</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-xs">Device</span>
+                    <div className="font-medium text-slate-900 dark:text-white">{result.deviceBrand} {result.deviceModel}</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-xs">Issue</span>
+                    <div className="font-medium text-slate-900 dark:text-white">{result.issueCategory}</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 text-xs">Est. Completion</span>
+                    <div className="font-medium text-slate-900 dark:text-white">
+                      {result.estimatedCompletion ?? "To be confirmed"}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -79,11 +140,18 @@ export default function TrackRepair() {
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${done ? "bg-blue-600 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-400"}`}>
                             {done ? <MdCheckCircle size={20} /> : <MdRadioButtonUnchecked size={20} />}
                           </div>
-                          {i < statusSteps.length - 1 && <div className={`w-0.5 h-8 mt-1 ${done ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"}`} />}
+                          {i < statusSteps.length - 1 && (
+                            <div className={`w-0.5 h-8 mt-1 ${done ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"}`} />
+                          )}
                         </div>
                         <div className="pb-6">
                           <div className={`font-medium text-sm ${active ? "text-blue-600 dark:text-blue-400" : done ? "text-slate-900 dark:text-white" : "text-slate-400"}`}>
-                            {step} {active && <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">Current</span>}
+                            {step}
+                            {active && (
+                              <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
+                                Current
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -92,12 +160,20 @@ export default function TrackRepair() {
                 </div>
               </div>
 
-              {result.notes && (
+              {result.technicianNotes && (
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
                   <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">Technician Notes</div>
-                  <div className="text-sm text-amber-800 dark:text-amber-300">{result.notes}</div>
+                  <div className="text-sm text-amber-800 dark:text-amber-300">{result.technicianNotes}</div>
                 </div>
               )}
+
+              {/* WhatsApp follow-up */}
+              <a
+                href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(`Hi! I want to follow up on my repair. Ticket ID: *${result.ticketId}*`)}`}
+                target="_blank" rel="noreferrer"
+                className="flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition-colors w-full">
+                <FaWhatsapp size={18} /> Follow Up on WhatsApp
+              </a>
             </motion.div>
           )}
         </motion.div>

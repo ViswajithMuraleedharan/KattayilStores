@@ -2,7 +2,9 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MdBolt, MdVerified, MdWhatsapp, MdAttachMoney, MdStar, MdArrowForward, MdPhone } from "react-icons/md";
 import { FaWhatsapp } from "react-icons/fa";
-import { testimonials, products } from "../data/dummy";
+import { testimonials } from "../data/dummy";
+import { useEffect, useState } from "react";
+import api from "../api/api";
 import ProductCard from "../components/ProductCard";
 import PublicLayout from "../components/PublicLayout";
 
@@ -23,6 +25,8 @@ const steps = [
 const fade = { hidden: { opacity: 0, y: 24 }, show: { opacity: 1, y: 0 } };
 
 export default function Home() {
+  const [products, setProducts] = useState([]);
+  useEffect(() => { api.get("/api/products").then((r) => setProducts(r.data.slice(0, 4))).catch(() => {}); }, []);
   return (
     <PublicLayout>
       {/* Hero */}

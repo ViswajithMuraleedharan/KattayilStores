@@ -4,6 +4,7 @@ import { MdCheckCircle, MdLocalShipping, MdStorefront, MdCreditCard, MdMoney } f
 import { useCart } from "../context/CartContext";
 import PublicLayout from "../components/PublicLayout";
 import { Link } from "react-router-dom";
+import api from "../api/api";
 
 export default function Checkout() {
   const { cart, total, clearCart } = useCart();
@@ -15,10 +16,25 @@ export default function Checkout() {
   const tax = Math.round(total * 0.18);
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
-  const handleOrder = (e) => {
+  const handleOrder = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => { setPlaced(true); clearCart(); setLoading(false); }, 1200);
+    try {
+      await api.post("/api/orders", {
+        customerName: form.name,
+        phone: form.phone.replace(/\D/g, "").slice(-10),
+        address: form.address,
+        deliveryType: delivery.toUpperCase(),
+        paymentMethod: payment.toUpperCase(),
+        items: cart.map((i) => ({ productId: i.id, quantity: i.qty })),
+      });
+      setPlaced(true);
+      clearCart();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const inputCls = "w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";

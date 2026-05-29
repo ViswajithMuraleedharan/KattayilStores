@@ -76,7 +76,7 @@ export default function Contact() {
                 </div>
               </div>
 
-              <a href="https://wa.me/919876543210" target="_blank" rel="noreferrer"
+              <a href="https://wa.me/919074037326" target="_blank" rel="noreferrer"
                 className="flex items-center gap-4 bg-green-500 hover:bg-green-600 text-white rounded-2xl p-5 transition-colors">
                 <FaWhatsapp size={36} />
                 <div>
